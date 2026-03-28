@@ -1,5 +1,6 @@
 Flask
 flask-cors
 pandas
+yfinance
 requests
 gunicorn
