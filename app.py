@@ -11,7 +11,7 @@ app = Flask(__name__)
 CORS(app)
 
 # ==========================================
-# 🔐 SASOnline API Credentials
+# 🔐 Stocko (SASOnline) API Credentials
 # ==========================================
 SAS_CLIENT_ID = "SAS-CLIENT1"
 SAS_SECRET = "Hhtg74iYYZY1nSJUvDBxKntGqfigem6yKyYw9rlb2qSXyhEEs8BZEtw27KsIE1UI"
@@ -23,11 +23,12 @@ SAS_ACCESS_TOKEN = None
 HEADERS = {'user-agent': 'Mozilla/5.0', 'referer': 'https://www.nseindia.com/'}
 
 # ------------------------------------------
-# 1. SASOnline Auth & Token Generation
+# 1. Stocko Auth & Token Generation
 # ------------------------------------------
 @app.route('/api/sas_login')
 def sas_login():
-    auth_url = f"{SAS_BASE_URL}/oauth/authorize?response_type=code&client_id={SAS_CLIENT_ID}&redirect_uri={SAS_REDIRECT_URI}&scope=orders holdings"
+    # 🔥 Updated to Stocko's new /oauth2/auth endpoint
+    auth_url = f"{SAS_BASE_URL}/oauth2/auth?response_type=code&client_id={SAS_CLIENT_ID}&redirect_uri={SAS_REDIRECT_URI}&scope=orders holdings"
     return redirect(auth_url)
 
 @app.route('/api/sas_callback')
@@ -46,10 +47,11 @@ def sas_callback():
     }
     
     try:
-        res = requests.post(f"{SAS_BASE_URL}/oauth/token", data=payload)
+        # 🔥 Updated to Stocko's new /oauth2/token endpoint
+        res = requests.post(f"{SAS_BASE_URL}/oauth2/token", data=payload)
         data = res.json()
         SAS_ACCESS_TOKEN = data.get('access_token')
-        return jsonify({"status": "success", "message": "SASOnline Token Activated!", "token": SAS_ACCESS_TOKEN})
+        return jsonify({"status": "success", "message": "Stocko API Token Activated!", "token": SAS_ACCESS_TOKEN})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)})
 
@@ -139,7 +141,7 @@ def get_live_call():
         strike = round(ltp / 50) * 50
         op_type = "CE" if bullish > bearish else "PE"
         
-        data_src = "SASOnline + XGBoost AI" if SAS_ACCESS_TOKEN else "YF Fallback + XGBoost AI"
+        data_src = "Stocko API + XGBoost AI" if SAS_ACCESS_TOKEN else "YF Fallback + XGBoost AI"
 
         return jsonify({
             "status": "success", "ltp": f"{ltp:,.2f}",
