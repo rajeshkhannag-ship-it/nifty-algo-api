@@ -96,24 +96,6 @@
         }
         .btn:active { opacity: 0.8; }
         
-        .sas-btn {
-            background-color: transparent;
-            color: #00e676;
-            border: 1px solid #00e676;
-            padding: 15px;
-            width: 100%;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            display: block;
-            text-align: center;
-            text-decoration: none;
-            box-sizing: border-box;
-            margin-top: 15px;
-            box-shadow: 0 0 10px rgba(0, 230, 118, 0.1);
-        }
-        
         .footer-info {
             text-align: center;
             font-size: 11px;
@@ -185,10 +167,6 @@
         <div class="timer" id="timerDisplay">00:00</div>
     </div>
     
-    <a href="https://nifty-algo-api.onrender.com/api/sas_login" target="_blank" class="sas-btn">
-        🔑 Connect SASOnline API
-    </a>
-
     <div class="footer-info" id="sourceInfo">Source: Connecting... | Time: --:--</div>
 </div>
 
@@ -205,7 +183,6 @@
             const data = await response.json();
             
             if(data.status === "success") {
-                // Update Price
                 document.getElementById('ltp').innerText = data.ltp;
                 let changeText = `${data.change > 0 ? '+' : ''}${data.change} (${data.pct}%)`;
                 let changeEl = document.getElementById('change');
@@ -219,28 +196,23 @@
                     document.getElementById('priceCard').style.borderBottom = "3px solid #ff5252";
                 }
 
-                // Update Levels
                 document.getElementById('support').innerText = data.support;
                 document.getElementById('resistance').innerText = data.resistance;
 
-                // Update AI Score
                 document.getElementById('bullText').innerText = `Bullish: ${data.bullish}%`;
                 document.getElementById('bearText').innerText = `Bearish: ${data.bearish}%`;
                 document.getElementById('bullBar').style.width = `${data.bullish}%`;
                 document.getElementById('bearBar').style.width = `${data.bearish}%`;
 
-                // Update Trade Info
                 document.getElementById('symbol').innerText = data.broker_symbol;
                 document.getElementById('entry').innerText = data.entry;
                 document.getElementById('sl').innerText = data.sl;
                 document.getElementById('t1').innerText = data.t1;
                 document.getElementById('t2').innerText = data.t2;
 
-                // Update Footer Source
                 let now = new Date();
                 document.getElementById('sourceInfo').innerText = `Source: ${data.data_source} | Time: ${now.toLocaleTimeString()}`;
                 
-                // Reset Timer
                 lastFetchTime = new Date();
             } else {
                 alert("API Error: " + data.message);
@@ -251,7 +223,6 @@
         btn.innerHTML = "🔄 REFRESH LIVE DATA";
     }
 
-    // Timer Logic
     setInterval(() => {
         let now = new Date();
         let diffMs = now - lastFetchTime;
@@ -268,7 +239,6 @@
         }
     }, 1000);
 
-    // Initial Fetch
     fetchData();
 </script>
 
