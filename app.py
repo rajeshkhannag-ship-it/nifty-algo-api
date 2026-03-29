@@ -15,7 +15,7 @@ CORS(app)
 # ==========================================
 SAS_CLIENT_ID = "SAS-CLIENT1"
 SAS_SECRET = "Hhtg74iYYZY1nSJUvDBxKntGqfigem6yKyYw9rlb2qSXyhEEs8BZEtw27KsIE1UI"
-SAS_REDIRECT_URI = "http://127.0.0.1:65015/"
+SAS_REDIRECT_URI = "https://nifty-algo-api.onrender.com/api/sas_callback"
 SAS_BASE_URL = "https://api.stocko.in"
 
 SAS_ACCESS_TOKEN = None  
