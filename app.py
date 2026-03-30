@@ -17,7 +17,6 @@ CORS(app)
 HEADERS = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.75 Safari/537.36',
     'accept-language': 'en-US,en;q=0.9',
-    'accept-encoding': 'gzip, deflate, br'
 }
 
 def get_current_expiry():
@@ -27,10 +26,23 @@ def get_current_expiry():
         days_ahead += 7 
     return (now + timedelta(days=days_ahead)).strftime("%d %b").upper()
 
+def get_google_finance_live():
+    """Bypass to get 100% Live Spot Price without API Keys"""
+    try:
+        url = "https://www.google.com/finance/quote/NIFTY_50:INDEXNSE"
+        html = requests.get(url, headers=HEADERS, timeout=4).text
+        marker = 'class="YMlKec fxKbKc">'
+        if marker in html:
+            price_str = html.split(marker)[1].split('<')[0].replace(',', '').replace('₹', '')
+            return float(price_str)
+        return None
+    except:
+        return None
+
 @app.route('/api/get_call', methods=['GET'])
 def get_live_call():
     try:
-        # Step 1: Base AI History Data (Yahoo Finance)
+        # Step 1: Base AI History Data (Yahoo Finance - For ML Candles)
         hist = yf.Ticker("^NSEI").history(interval="5m", period="5d")
         if hist.empty: return jsonify({"status": "error", "message": "No Market Data Available"})
         
@@ -47,19 +59,18 @@ def get_live_call():
         data_source = ""
 
         # ========================================================
-        # 🥇 OPTION 1: NSE OFFICIAL WEBSITE (PRIMARY)
+        # 🥇 OPTION 1: NSE OFFICIAL WEBSITE (For Option Chain S&R)
         # ========================================================
         try:
             session = requests.Session()
-            session.get("https://www.nseindia.com", headers=HEADERS, timeout=5)
-            nse_res = session.get("https://www.nseindia.com/api/option-chain-indices?symbol=NIFTY", headers=HEADERS, timeout=5)
+            session.get("https://www.nseindia.com", headers=HEADERS, timeout=3)
+            nse_res = session.get("https://www.nseindia.com/api/option-chain-indices?symbol=NIFTY", headers=HEADERS, timeout=3)
             
             if nse_res.status_code == 200:
                 raw = nse_res.json()
                 final_ltp = float(raw['records']['underlyingValue'])
-                data_source = "1. NSE Official Data"
+                data_source = "1. NSE Live Option Chain"
                 
-                # Calculate S&R from Open Interest
                 records = raw['records']['data']
                 df_nse = pd.DataFrame([{'STRIKE': r['strikePrice'], 'CALL_OI': r.get('CE', {}).get('openInterest', 0), 'PUT_OI': r.get('PE', {}).get('openInterest', 0)} for r in records if 'CE' in r or 'PE' in r])
                 nearby = df_nse[(df_nse['STRIKE'] >= final_ltp - 500) & (df_nse['STRIKE'] <= final_ltp + 500)]
@@ -75,11 +86,16 @@ def get_live_call():
             pass
 
         # ========================================================
-        # 🥈 OPTION 2: YAHOO FINANCE (FALLBACK)
+        # 🥈 OPTION 2: GOOGLE FINANCE LIVE BYPASS (For Spot Price)
         # ========================================================
         if not final_ltp:
-            final_ltp = yf_ltp
-            data_source = "2. Yahoo Finance Data"
+            google_ltp = get_google_finance_live()
+            if google_ltp:
+                final_ltp = google_ltp
+                data_source = "2. Google Finance LIVE"
+            else:
+                final_ltp = yf_ltp
+                data_source = "3. Yahoo Finance (Delayed)"
             
             if resistance <= final_ltp: resistance = int(final_ltp + 150)
             if support >= final_ltp: support = int(final_ltp - 150)
@@ -109,14 +125,12 @@ def get_live_call():
             bearish = int(prob[0] * 100)
             bullish = int(prob[1] * 100)
             
-            # Smart PCR Adjustment
             if pcr != "N/A":
                 if float(pcr) > 1.2: bullish = min(bullish + 10, 100); bearish = max(bearish - 10, 0)
                 elif float(pcr) < 0.8: bearish = min(bearish + 10, 100); bullish = max(bullish - 10, 0)
 
         strike = round(final_ltp / 50) * 50
         op_type = "CE" if bullish > bearish else "PE"
-        
         prev_close = hist['Close'].iloc[-2]
 
         return jsonify({
