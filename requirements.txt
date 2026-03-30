@@ -2,7 +2,8 @@ Flask
 flask-cors
 pandas
 yfinance
-requests
 gunicorn
 xgboost
 scikit-learn
+pyotp
+requests
