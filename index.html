@@ -26,7 +26,6 @@
         .signal-box p { margin: 5px 0; font-size: 14px; }
         .btn { background-color: #3f51b5; color: white; border: none; padding: 15px; width: 100%; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: 0.3s; box-sizing: border-box; }
         .btn:active { opacity: 0.8; }
-        .sas-btn { display: block; width: 100%; padding: 15px; margin-top: 15px; background: transparent; color: #00e676; text-align: center; border-radius: 10px; text-decoration: none; border: 1px solid #00e676; font-weight: bold; font-size: 16px; box-sizing: border-box; }
         .footer-info { text-align: center; font-size: 11px; color: #666; margin-top: 20px; line-height: 1.5; }
         .timer-box { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
         .timer { background: #2a2a2a; padding: 10px 15px; border-radius: 8px; font-size: 14px; color: #00e676; font-weight: bold; }
@@ -45,7 +44,7 @@
     </div>
 
     <div class="card">
-        <div class="section-title">🛡️ SMART AI OPTION LEVELS</div>
+        <div class="section-title">🛡️ NSE OPTION LEVELS</div>
         <div class="levels-row">
             <div class="level-box"><p class="red">SUPPORT</p><h3 id="support">-</h3></div>
             <div class="level-box"><p class="green">RESISTANCE</p><h3 id="resistance">-</h3></div>
@@ -75,14 +74,10 @@
         <div class="timer" id="timerDisplay">00:00</div>
     </div>
     <div class="auto-refresh-text" id="nextRefreshText">Auto-refreshing in...</div>
-
-    <a href="https://nifty-algo-api.onrender.com/api/sas_login" target="_blank" class="sas-btn">
-        🔑 Connect SASOnline API
-    </a>
     
     <div class="footer-info" id="sourceInfo">
         Source: Connecting... <br>
-        TOTP Status: Checking... | Time: --:--
+        Time: --:--
     </div>
 </div>
 
@@ -131,12 +126,11 @@
                 document.getElementById('t2').innerText = data.t2;
 
                 let now = new Date();
-                let totpStatus = data.auto_totp_status || "Active";
-                document.getElementById('sourceInfo').innerHTML = `Source: <b>${data.data_source}</b> <br> TOTP Auto-Login: <span style="color:#00e676;">${totpStatus}</span> | Time: ${now.toLocaleTimeString()}`;
+                document.getElementById('sourceInfo').innerHTML = `Source: <b style="color:#00e676;">${data.data_source}</b> <br> Time: ${now.toLocaleTimeString()}`;
                 
                 lastFetchTime = new Date();
                 nextAutoRefreshSeconds = getRandomInt(180, 185);
-            } else { console.log("API Waiting/Error: " + data.message); }
+            } else { console.log("API Error: " + data.message); }
         } catch (error) { console.log("Retrying connection..."); }
         
         btn.innerHTML = "🔄 REFRESH LIVE DATA";
