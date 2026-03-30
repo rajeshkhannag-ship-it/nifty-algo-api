@@ -17,28 +17,24 @@ CORS(app)
 SAS_CLIENT_ID = "SAS-CLIENT1"
 SAS_SECRET = "Hhtg74iYYZY1nSJUvDBxKntGqfigem6yKyYw9rlb2qSXyhEEs8BZEtw27KsIE1UI"
 SAS_BASE_URL = "https://api.stocko.in"
-
-# Render లో రన్ చేస్తున్నారు కాబట్టి ఈ లింక్ వాడాలి (మీ Stocko డాష్బోర్డ్ లో దీన్ని అప్డేట్ చేయండి)
 SAS_REDIRECT_URI = "https://nifty-algo-api.onrender.com/api/sas_callback"
 
-# 🔥 TOTP ఆటోమేషన్ సీక్రెట్ కీ (మీరు QR కోడ్ కింద కాపీ చేసింది ఇక్కడ పెట్టాలి)
+# 🔥 TOTP ఆటోమేషన్ సీక్రెట్ కీ 
 TOTP_SECRET = "మీ_16_అక్షరాల_సీక్రెట్_కీ_ఇక్కడ_పెట్టండి" 
 
 SAS_ACCESS_TOKEN = None  
+HEADERS = {'user-agent': 'Mozilla/5.0', 'referer': 'https://www.nseindia.com/'}
 
 # ------------------------------------------
 # 1. TOTP & Auto-Login Logic
 # ------------------------------------------
 def get_live_totp():
-    """Google Authenticator లేకుండానే 6-అంకెల కోడ్‌ను ఆటోమేటిక్‌గా జనరేట్ చేస్తుంది"""
     if TOTP_SECRET and TOTP_SECRET != "మీ_16_అక్షరాల_సీక్రెట్_కీ_ఇక్కడ_పెట్టండి":
-        totp = pyotp.TOTP(TOTP_SECRET)
-        return totp.now()
+        return pyotp.TOTP(TOTP_SECRET).now()
     return None
 
 @app.route('/api/sas_login')
 def sas_login():
-    """ఒకవేళ మాన్యువల్ లాగిన్ అవసరమైతే ఈ లింక్ పనిచేస్తుంది"""
     auth_url = f"{SAS_BASE_URL}/oauth2/auth?response_type=code&client_id={SAS_CLIENT_ID}&redirect_uri={SAS_REDIRECT_URI}&scope=orders holdings"
     return redirect(auth_url)
 
@@ -46,27 +42,17 @@ def sas_login():
 def sas_callback():
     global SAS_ACCESS_TOKEN
     auth_code = request.args.get('code')
-    if not auth_code:
-        return jsonify({"error": "No Auth Code Found"})
+    if not auth_code: return jsonify({"error": "No Auth Code Found"})
     
-    payload = {
-        "grant_type": "authorization_code",
-        "client_id": SAS_CLIENT_ID,
-        "client_secret": SAS_SECRET,
-        "redirect_uri": SAS_REDIRECT_URI,
-        "code": auth_code
-    }
-    
+    payload = {"grant_type": "authorization_code", "client_id": SAS_CLIENT_ID, "client_secret": SAS_SECRET, "redirect_uri": SAS_REDIRECT_URI, "code": auth_code}
     try:
         res = requests.post(f"{SAS_BASE_URL}/oauth2/token", data=payload)
-        data = res.json()
-        SAS_ACCESS_TOKEN = data.get('access_token')
-        return jsonify({"status": "success", "message": "Stocko API Token Activated Successfully!", "totp_used": get_live_totp()})
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)})
+        SAS_ACCESS_TOKEN = res.json().get('access_token')
+        return jsonify({"status": "success", "message": "Stocko Token Activated!"})
+    except Exception as e: return jsonify({"status": "error", "message": str(e)})
 
 # ------------------------------------------
-# 2. Market Data & XGBoost AI Logic
+# 2. Helper Functions
 # ------------------------------------------
 def get_next_expiry():
     today = datetime.now()
@@ -74,27 +60,87 @@ def get_next_expiry():
     if days_ahead < 0: days_ahead += 7
     return (today + timedelta(days=days_ahead)).strftime("%d %b").upper()
 
+# ------------------------------------------
+# 3. Main Call Endpoint (3-TIER WATERFALL LOGIC)
+# ------------------------------------------
 @app.route('/api/get_call', methods=['GET'])
 def get_live_call():
     try:
-        # Stocko API టోకెన్ ఉంటే అక్కడినుండి, లేదంటే YFinance నుండి డేటా వస్తుంది
-        nifty = yf.Ticker("^NSEI")
-        hist = nifty.history(interval="5m", period="5d")
+        # 1. Base AI History Data (Always YFinance for safe historical candles)
+        hist = yf.Ticker("^NSEI").history(interval="5m", period="5d")
+        if hist.empty: return jsonify({"status": "error", "message": "No Market Data Available"})
         
-        if hist.empty: 
-            return jsonify({"status": "error", "message": "No Market Data Available"})
-            
-        ltp = round(float(hist['Close'].iloc[-1]), 2)
+        yf_ltp = round(float(hist['Close'].iloc[-1]), 2)
         
-        # 🧠 Smart Algorithmic S&R (Pure Price Action)
+        # Default Price Action S&R (Fallback)
         recent_data = hist.tail(150)
-        resistance = int(recent_data['High'].max())
-        support = int(recent_data['Low'].min())
+        pa_resistance = int(recent_data['High'].max())
+        pa_support = int(recent_data['Low'].min())
         
-        if resistance <= ltp: resistance = int(ltp + 150)
-        if support >= ltp: support = int(ltp - 150)
+        final_ltp = None
+        support = pa_support
+        resistance = pa_resistance
+        pcr = "N/A"
+        data_source = ""
 
-        # 🤖 XGBoost Machine Learning Logic
+        # ========================================================
+        # 🥇 OPTION 1: SAS ONLINE API (PRIMARY)
+        # ========================================================
+        if SAS_ACCESS_TOKEN:
+            try:
+                headers = {"Authorization": f"Bearer {SAS_ACCESS_TOKEN}"}
+                # Request Timeout is set to 3 seconds to avoid freezing
+                res = requests.get(f"{SAS_BASE_URL}/api/v1/marketdata/quote/NSE/NIFTY 50", headers=headers, timeout=3)
+                if res.status_code == 200:
+                    sas_data = res.json().get('data', {})
+                    if sas_data.get('ltp'):
+                        final_ltp = float(sas_data.get('ltp'))
+                        data_source = "1. SAS Online API"
+            except: pass
+
+        # ========================================================
+        # 🥈 OPTION 2: NSE WEBSITE (SECONDARY)
+        # ========================================================
+        if not final_ltp:
+            try:
+                session = requests.Session()
+                session.get("https://www.nseindia.com", headers=HEADERS, timeout=3)
+                nse_res = session.get("https://www.nseindia.com/api/option-chain-indices?symbol=NIFTY", headers=HEADERS, timeout=4)
+                
+                if nse_res.status_code == 200:
+                    raw = nse_res.json()
+                    final_ltp = float(raw['records']['underlyingValue'])
+                    data_source = "2. NSE Website"
+                    
+                    # NSE S&R Logic
+                    records = raw['records']['data']
+                    df_nse = pd.DataFrame([{'STRIKE': r['strikePrice'], 'CALL_OI': r.get('CE', {}).get('openInterest', 0), 'PUT_OI': r.get('PE', {}).get('openInterest', 0)} for r in records if 'CE' in r or 'PE' in r])
+                    nearby = df_nse[(df_nse['STRIKE'] >= final_ltp - 500) & (df_nse['STRIKE'] <= final_ltp + 500)]
+                    
+                    calls = nearby[nearby['STRIKE'] > final_ltp]
+                    if not calls.empty: resistance = int(calls.loc[calls['CALL_OI'].idxmax(), 'STRIKE'])
+                    
+                    puts = nearby[nearby['STRIKE'] <= final_ltp]
+                    if not puts.empty: support = int(puts.loc[puts['PUT_OI'].idxmax(), 'STRIKE'])
+                    
+                    pcr = round(raw['filtered']['PE']['totOI'] / raw['filtered']['CE']['totOI'], 2)
+            except: pass
+
+        # ========================================================
+        # 🥉 OPTION 3: YAHOO FINANCE (FALLBACK)
+        # ========================================================
+        if not final_ltp:
+            final_ltp = yf_ltp
+            data_source = "3. Yahoo Finance"
+
+        # Update the final recognized LTP for ML accuracy
+        if resistance <= final_ltp: resistance = int(final_ltp + 150)
+        if support >= final_ltp: support = int(final_ltp - 150)
+        hist.iloc[-1, hist.columns.get_loc('Close')] = final_ltp
+
+        # ========================================================
+        # 🤖 XGBOOST MACHINE LEARNING LOGIC
+        # ========================================================
         df = hist.copy()
         df['VWAP'] = (df['Volume'] * (df['High'] + df['Low'] + df['Close']) / 3).cumsum() / df['Volume'].cumsum()
         df['Target'] = np.where(df['Close'].shift(-1) > df['Close'], 1, 0)
@@ -114,25 +160,28 @@ def get_live_call():
             
             bearish = int(prob[0] * 100)
             bullish = int(prob[1] * 100)
+            
+            # Smart PCR Adjustment
+            if pcr != "N/A":
+                if float(pcr) > 1.0: bullish = min(bullish + 10, 100); bearish = max(bearish - 10, 0)
+                elif float(pcr) < 0.9: bearish = min(bearish + 10, 100); bullish = max(bullish - 10, 0)
 
-        strike = round(ltp / 50) * 50
+        strike = round(final_ltp / 50) * 50
         op_type = "CE" if bullish > bearish else "PE"
-        
-        data_src = "Stocko API + XGBoost AI" if SAS_ACCESS_TOKEN else "YFinance + XGBoost AI"
 
         return jsonify({
             "status": "success", 
-            "ltp": f"{ltp:,.2f}",
-            "change": round(ltp - hist['Close'].iloc[-2], 2),
-            "pct": round(((ltp - hist['Close'].iloc[-2])/hist['Close'].iloc[-2])*100, 2),
+            "ltp": f"{final_ltp:,.2f}",
+            "change": round(final_ltp - hist['Close'].iloc[-2], 2),
+            "pct": round(((final_ltp - hist['Close'].iloc[-2])/hist['Close'].iloc[-2])*100, 2),
             "bullish": bullish, 
             "bearish": bearish,
             "support": support, 
             "resistance": resistance,
-            "pcr": "N/A", 
+            "pcr": pcr, 
             "broker_symbol": f"NIFTY {get_next_expiry()} {strike} {op_type}",
             "entry": 130, "t1": 150, "t2": 175, "sl": 115, 
-            "data_source": data_src,
+            "data_source": f"{data_source} + XGBoost",
             "auto_totp_status": "Active" if get_live_totp() else "Pending Setup"
         })
     except Exception as e: 
