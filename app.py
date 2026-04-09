@@ -1,9 +1,11 @@
+import pandas as pd
 import requests
 import urllib3
 import time
 from datetime import datetime
 from flask import Flask, jsonify
 from flask_cors import CORS
+from nselib import capital_market
 
 # SSL Warnings Fix
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -16,13 +18,21 @@ HEADERS = {
     'accept-language': 'en-US,en;q=0.9',
 }
 
+cache = {
+    "indices": {},
+    "fii_dii": None,
+    "vol_gainers": [],
+    "last_update": 0
+}
+
+# --- YOUR ADVANCED STRIKE & EXPIRY LOGIC ---
 def nearest_50(spot):
     return int(round(spot / 50) * 50)
 
-def generate_strikes(spot):
+def generate_strikes(spot: float):
     atm = nearest_50(spot)
     # Expiry aggressive mode
-    if datetime.now().weekday() >= 2:  # Wed/Thu (2, 3)
+    if datetime.now().weekday() >= 2:  # Wed/Thu
         step = 4  # ±200
     else:
         step = 6  # ±300
@@ -31,11 +41,46 @@ def generate_strikes(spot):
 
 def get_current_expiry(data):
     expiries = sorted(list(set([x["expiryDate"] for x in data["records"]["data"]])))
-    return expiries[0]
+    return expiries[0]   # nearest expiry
 
 def format_strike(symbol, expiry, strike, opt_type):
+    # convert date format (30-Mar-2026 → 30 MAR 2026)
     exp = expiry.replace("-", " ").upper()
     return f"{symbol} {exp} {strike} {opt_type}"
+# -------------------------------------------
+
+def update_intelligence_cache():
+    current_time = time.time()
+    if current_time - cache['last_update'] > 300: # 5 mins
+        try:
+            idx_df = capital_market.market_watch_all_indices()
+            nifty = idx_df[idx_df['index'] == 'NIFTY 50'].iloc[0]
+            bank = idx_df[idx_df['index'] == 'NIFTY BANK'].iloc[0]
+            it = idx_df[idx_df['index'] == 'NIFTY IT'].iloc[0]
+            cache['indices'] = {
+                'nifty': f"₹{nifty['last']} ({nifty['percent_change']}%)",
+                'bank': f"₹{bank['last']} ({bank['percent_change']}%)",
+                'it': f"₹{it['last']} ({it['percent_change']}%)"
+            }
+        except: pass
+
+        try:
+            fii_df = capital_market.fii_dii_trading_activity()
+            last_row = fii_df.iloc[-1]
+            net_val = float(str(last_row.get('net_value', '0')).replace(',', ''))
+            cache['fii_dii'] = {
+                'date': last_row.get('date', ''),
+                'net': net_val,
+                'status': 'Bullish 🟢' if net_val > 0 else 'Bearish 🔴'
+            }
+        except: pass
+
+        try:
+            vol_df = capital_market.volume_gainers()
+            cache['vol_gainers'] = vol_df[['symbol', 'last_price']].head(4).to_dict(orient='records')
+        except: pass
+        
+        cache['last_update'] = current_time
 
 def get_google_finance_live():
     try:
@@ -43,100 +88,71 @@ def get_google_finance_live():
         html = requests.get(url, headers=HEADERS, timeout=3).text
         marker = 'class="YMlKec fxKbKc">'
         if marker in html:
-            return float(html.split(marker)[1].split('<')[0].replace(',', '').replace('₹', ''))
+            price_str = html.split(marker)[1].split('<')[0].replace(',', '').replace('₹', '')
+            return float(price_str)
+        return None
     except: return None
 
 @app.route('/api/get_call', methods=['GET'])
 def get_live_call():
     try:
-        spot = get_google_finance_live()
+        update_intelligence_cache()
+        final_ltp = get_google_finance_live()
+        if not final_ltp: final_ltp = 0.0
+
         support, resistance = "N/A", "N/A"
-        signal_data = None
+        signal = "NONE"
+        alert_msg = ""
+        trade_symbol = ""
 
-        session = requests.Session()
-        session.get("https://www.nseindia.com", headers=HEADERS, timeout=2)
-        nse_res = session.get("https://www.nseindia.com/api/option-chain-indices?symbol=NIFTY", headers=HEADERS, timeout=3)
-        
-        if nse_res.status_code == 200:
-            data = nse_res.json()
-            if not spot: spot = float(data['records']['underlyingValue'])
+        try:
+            session = requests.Session()
+            session.get("https://www.nseindia.com", headers=HEADERS, timeout=2)
+            nse_res = session.get("https://www.nseindia.com/api/option-chain-indices?symbol=NIFTY", headers=HEADERS, timeout=2)
             
-            expiry = get_current_expiry(data)
-            atm, active_strikes = generate_strikes(spot)
-            
-            records = data['records']['data']
-            tot_ce_oi = data['filtered']['CE']['totOI']
-            tot_pe_oi = data['filtered']['PE']['totOI']
-            pcr = round(tot_pe_oi / tot_ce_oi, 2) if tot_ce_oi > 0 else 1.0
+            if nse_res.status_code == 200:
+                raw = nse_res.json()
+                nse_ltp = float(raw['records']['underlyingValue'])
+                if final_ltp == 0.0: final_ltp = nse_ltp
+                
+                # Using your logic here
+                expiry_date = get_current_expiry(raw)
+                atm, valid_strikes = generate_strikes(final_ltp)
+                
+                records = raw['records']['data']
+                exp_records = [r for r in records if r.get('expiryDate') == expiry_date]
+                
+                df_nse = pd.DataFrame([{'STRIKE': r['strikePrice'], 'CALL_OI': r.get('CE', {}).get('openInterest', 0), 'PUT_OI': r.get('PE', {}).get('openInterest', 0)} for r in exp_records if 'CE' in r or 'PE' in r])
+                
+                nearby = df_nse[df_nse['STRIKE'].isin(valid_strikes)]
+                
+                calls = nearby[nearby['STRIKE'] > final_ltp]
+                if not calls.empty: resistance = int(calls.loc[calls['CALL_OI'].idxmax(), 'STRIKE'])
+                
+                puts = nearby[nearby['STRIKE'] <= final_ltp]
+                if not puts.empty: support = int(puts.loc[puts['PUT_OI'].idxmax(), 'STRIKE'])
 
-            # Approximation of VWAP using Option Chain bounds
-            vwap = spot # Fallback
-            
-            ce_list, pe_list = [], []
-            oi_change = {}
-            row_data = {}
+                # ALERT LOGIC (15 point buffer)
+                if type(support) == int and abs(final_ltp - support) <= 15:
+                    signal = "BUY_CE"
+                    trade_symbol = format_strike("NIFTY", expiry_date, support, "CE")
+                    alert_msg = f"PRICE AT SUPPORT! Watch {trade_symbol}"
+                
+                elif type(resistance) == int and abs(final_ltp - resistance) <= 15:
+                    signal = "BUY_PE"
+                    trade_symbol = format_strike("NIFTY", expiry_date, resistance, "PE")
+                    alert_msg = f"PRICE AT RESISTANCE! Watch {trade_symbol}"
 
-            for r in records:
-                if r['expiryDate'] == expiry:
-                    s = r['strikePrice']
-                    ce_oi = r.get('CE', {}).get('openInterest', 0)
-                    pe_oi = r.get('PE', {}).get('openInterest', 0)
-                    ce_chg = r.get('CE', {}).get('changeinOpenInterest', 0)
-                    pe_chg = r.get('PE', {}).get('changeinOpenInterest', 0)
-                    ce_ltp = r.get('CE', {}).get('lastPrice', 0)
-                    pe_ltp = r.get('PE', {}).get('lastPrice', 0)
-                    
-                    if s in active_strikes:
-                        if s > spot: ce_list.append((s, ce_oi))
-                        if s <= spot: pe_list.append((s, pe_oi))
-                        
-                        oi_change[s] = {"CE": ce_chg, "PE": pe_chg}
-                        row_data[s] = {"CE_LTP": ce_ltp, "PE_LTP": pe_ltp}
-
-            if ce_list: resistance = sorted(ce_list, key=lambda x: x[1], reverse=True)[0][0]
-            if pe_list: support = sorted(pe_list, key=lambda x: x[1], reverse=True)[0][0]
-
-            # 🚀 SIGNAL GENERATION LOGIC
-            strike = atm
-            if strike in oi_change and strike in row_data:
-                ce_change = oi_change[strike]["CE"]
-                pe_change = oi_change[strike]["PE"]
-
-                # 🟢 CALL (Short Covering / Long Buildup)
-                if pcr > 1.05 and spot > vwap and ce_change < 0:
-                    entry = row_data[strike]["CE_LTP"]
-                    name = format_strike("NIFTY", expiry, strike, "CE")
-                    signal_data = {
-                        "type": "BUY CALL 🟢",
-                        "name": name,
-                        "entry": entry,
-                        "t1": round(entry * 1.2, 2),
-                        "t2": round(entry * 1.4, 2),
-                        "sl": round(entry * 0.85, 2)
-                    }
-
-                # 🔴 PUT (Long Unwinding / Short Buildup)
-                elif pcr < 0.95 and spot < vwap and pe_change < 0:
-                    entry = row_data[strike]["PE_LTP"]
-                    name = format_strike("NIFTY", expiry, strike, "PE")
-                    signal_data = {
-                        "type": "BUY PUT 🔴",
-                        "name": name,
-                        "entry": entry,
-                        "t1": round(entry * 1.2, 2),
-                        "t2": round(entry * 1.4, 2),
-                        "sl": round(entry * 0.85, 2)
-                    }
-
-        if not spot: spot = 0.0
+        except Exception as e: print("NSE Error:", e)
 
         return jsonify({
             "status": "success", 
-            "ltp": f"{spot:,.2f}",
+            "ltp": f"{final_ltp:,.2f}",
             "support": support, 
             "resistance": resistance,
-            "pcr": pcr,
-            "signal": signal_data
+            "signal": signal,
+            "alert_msg": alert_msg,
+            "intelligence": cache
         })
     except Exception as e: 
         return jsonify({"status": "error", "message": str(e)})
