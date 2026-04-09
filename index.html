@@ -6,40 +6,37 @@
     <title>AI HEDGE FUND TERMINAL</title>
     <style>
         body { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 15px; display: flex; justify-content: center; }
-        .dashboard { max-width: 800px; width: 100%; display: grid; gap: 15px; grid-template-columns: 1fr; }
-        @media (min-width: 600px) { .dashboard { grid-template-columns: 1fr 1fr; } .full-width { grid-column: span 2; } }
+        .dashboard { max-width: 600px; width: 100%; display: grid; gap: 15px; }
         
         .card { background-color: #161b22; border-radius: 12px; padding: 20px; border: 1px solid #30363d; box-shadow: 0 4px 6px rgba(0,0,0,0.5); }
         .card-title { font-size: 12px; color: #58a6ff; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; border-bottom: 1px solid #30363d; padding-bottom: 5px;}
         
         .ltp-box { text-align: center; }
-        .ltp { font-size: 48px; font-weight: bold; color: #3fb950; text-shadow: 0 0 10px rgba(63, 185, 80, 0.3); margin: 10px 0;}
+        .ltp { font-size: 48px; font-weight: bold; color: #3fb950; margin: 10px 0;}
         
         .snr-row { display: flex; justify-content: space-between; text-align: center; }
         .level-box p { margin: 0 0 5px 0; font-size: 12px; color: #8b949e; }
         .level-box h3 { margin: 0; font-size: 26px; font-weight: bold; }
         .green { color: #3fb950; } .red { color: #f85149; }
 
-        .idx-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center; }
-        .idx-item p { margin: 0; font-size: 10px; color: #8b949e; text-transform: uppercase;}
-        .idx-item h4 { margin: 5px 0 0 0; font-size: 13px; color: #fff; }
+        /* Signal Box Styles */
+        .signal-box { background-color: #21262d; border-left: 5px solid #d29922; text-align: center; display: none; animation: pulse 2s infinite; }
+        .sig-type { font-size: 24px; font-weight: bold; color: #d29922; margin-bottom: 5px;}
+        .sig-name { font-size: 18px; color: #fff; margin-bottom: 15px; }
+        .sig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 16px; font-weight: bold;}
+        .sig-grid div { background: #0d1117; padding: 10px; border-radius: 6px; }
 
-        .fii-box { text-align: center; font-size: 18px; padding: 10px; background: #21262d; border-radius: 8px;}
-        
-        .vol-list { list-style: none; padding: 0; margin: 0; }
-        .vol-list li { display: flex; justify-content: space-between; font-size: 14px; padding: 8px 0; border-bottom: 1px solid #30363d; }
-        .vol-list li:last-child { border-bottom: none; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(210, 153, 34, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(210, 153, 34, 0); } 100% { box-shadow: 0 0 0 0 rgba(210, 153, 34, 0); } }
 
         .btn { background-color: #1f6feb; color: white; border: none; padding: 15px; width: 100%; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.3s; }
         .btn:active { background-color: #388bfd; }
-        .footer-info { text-align: center; font-size: 11px; color: #666; margin-top: 10px; }
     </style>
 </head>
 <body>
 
 <div class="dashboard">
-    <div class="card ltp-box full-width" style="border-top: 3px solid #3fb950;">
-        <div class="card-title">NIFTY 50 • LIVE SPOT</div>
+    <div class="card ltp-box" style="border-top: 3px solid #3fb950;">
+        <div class="card-title">NIFTY 50 • LIVE SPOT <span id="pcr-badge" style="float:right; color:#fff;">PCR: --</span></div>
         <div class="ltp" id="ltp">Loading...</div>
     </div>
 
@@ -51,77 +48,83 @@
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-title">📈 Market Pulse</div>
-        <div class="idx-grid">
-            <div class="idx-item"><p>NIFTY 50</p><h4 id="idx-nifty">--</h4></div>
-            <div class="idx-item"><p>BANK NIFTY</p><h4 id="idx-bank">--</h4></div>
-            <div class="idx-item"><p>NIFTY IT</p><h4 id="idx-it">--</h4></div>
+    <div class="card signal-box" id="signal-card">
+        <div class="sig-type" id="sig-type">📢 BUY CALL</div>
+        <div class="sig-name" id="sig-name">NIFTY 30 MAR 2026 22500 CE</div>
+        
+        <div style="font-size: 20px; color: #fff; margin-bottom: 10px;">Entry / Trigger: ₹<span id="sig-entry">0</span></div>
+        
+        <div class="sig-grid">
+            <div style="color: #3fb950;">Target 1: ₹<span id="sig-t1">0</span></div>
+            <div style="color: #3fb950;">Target 2: ₹<span id="sig-t2">0</span></div>
+            <div style="color: #f85149; grid-column: span 2;">Stop Loss: ₹<span id="sig-sl">0</span></div>
         </div>
     </div>
 
-    <div class="card">
-        <div class="card-title">🏦 FII/DII Flow (Latest)</div>
-        <div class="fii-box" id="fii-box">
-            Waiting for NSE data...
-        </div>
-    </div>
-
-    <div class="card">
-        <div class="card-title">📊 Top Volume Gainers</div>
-        <ul class="vol-list" id="vol-list">
-            <li><span>Loading...</span><span>--</span></li>
-        </ul>
-    </div>
-
-    <div class="card full-width" style="padding: 15px;">
+    <div class="card" style="padding: 15px;">
         <button class="btn" id="refreshBtn" onclick="fetchData()">🔄 REFRESH LIVE DASHBOARD</button>
-        <div class="footer-info" id="sourceInfo">Auto-refresh active | Time: --:--</div>
+        <div style="text-align: center; font-size: 11px; color: #666; margin-top: 10px;" id="sourceInfo">Auto-refresh active | Time: --:--</div>
     </div>
 </div>
 
 <script>
     const API_URL = "https://nifty-algo-api.onrender.com/api/get_call";
-    
+    let lastSignalName = ""; // To prevent continuous beeping for the same signal
+    let audioCtx = null;
+
+    // Beep Sound Generator
+    function playBeep() {
+        try {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            let osc = audioCtx.createOscillator();
+            let gainNode = audioCtx.createGain();
+            
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(800, audioCtx.currentTime); // High pitch beep
+            
+            gainNode.gain.setValueAtTime(1, audioCtx.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.5);
+            
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.5);
+        } catch (e) { console.log("Audio play blocked by browser."); }
+    }
+
     async function fetchData() {
         const btn = document.getElementById('refreshBtn');
-        btn.innerHTML = "⏳ Fetching Intelligence...";
+        btn.innerHTML = "⏳ Scanning Option Chain...";
         
         try {
             const response = await fetch(API_URL);
             const data = await response.json();
             
             if(data.status === "success") {
-                // 1. Live Price & S&R
                 document.getElementById('ltp').innerText = data.ltp;
                 document.getElementById('support').innerText = data.support;
                 document.getElementById('resistance').innerText = data.resistance;
+                document.getElementById('pcr-badge').innerText = `PCR: ${data.pcr}`;
 
-                // 2. Market Pulse (Indices)
-                if(data.intelligence.indices.nifty) {
-                    document.getElementById('idx-nifty').innerText = data.intelligence.indices.nifty;
-                    document.getElementById('idx-bank').innerText = data.intelligence.indices.bank;
-                    document.getElementById('idx-it').innerText = data.intelligence.indices.it;
-                }
+                // SIGNAL LOGIC
+                if (data.signal) {
+                    document.getElementById('signal-card').style.display = 'block';
+                    document.getElementById('sig-type').innerText = data.signal.type;
+                    document.getElementById('sig-name').innerText = data.signal.name;
+                    document.getElementById('sig-entry').innerText = data.signal.entry;
+                    document.getElementById('sig-t1').innerText = data.signal.t1;
+                    document.getElementById('sig-t2').innerText = data.signal.t2;
+                    document.getElementById('sig-sl').innerText = data.signal.sl;
 
-                // 3. FII/DII Flow
-                if(data.intelligence.fii_dii) {
-                    let fii = data.intelligence.fii_dii;
-                    let color = fii.net > 0 ? '#3fb950' : '#f85149';
-                    document.getElementById('fii-box').innerHTML = `
-                        <span style="font-size: 14px; color:#8b949e">${fii.date}</span><br>
-                        Net: <b style="color:${color}">₹${fii.net} Cr</b> <br>
-                        <span style="font-size: 15px;">${fii.status}</span>
-                    `;
-                }
-
-                // 4. Volume Gainers
-                if(data.intelligence.vol_gainers && data.intelligence.vol_gainers.length > 0) {
-                    let volHtml = "";
-                    data.intelligence.vol_gainers.forEach(v => {
-                        volHtml += `<li><span>${v.symbol}</span><span style="color:#58a6ff">₹${v.last_price}</span></li>`;
-                    });
-                    document.getElementById('vol-list').innerHTML = volHtml;
+                    // Play beep ONLY if it's a new signal
+                    if (data.signal.name !== lastSignalName) {
+                        playBeep();
+                        lastSignalName = data.signal.name;
+                    }
+                } else {
+                    document.getElementById('signal-card').style.display = 'none';
+                    lastSignalName = ""; // Reset if signal disappears
                 }
 
                 let now = new Date();
@@ -134,6 +137,12 @@
 
     // Auto refresh every 3 minutes
     setInterval(fetchData, 180000);
+    
+    // User needs to click somewhere on page to allow audio to play
+    document.body.addEventListener('click', () => {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }, { once: true });
+
     fetchData();
 </script>
 
