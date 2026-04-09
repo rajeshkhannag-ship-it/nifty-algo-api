@@ -1,9 +1,6 @@
 Flask
 flask-cors
-pandas
-yfinance
-gunicorn
-xgboost
-scikit-learn
-pyotp
 requests
+pandas
+urllib3
+nselib
