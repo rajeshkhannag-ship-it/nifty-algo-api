@@ -3,160 +3,137 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NIFTY XGB-MASTER: HEDGE FUND EDITION</title>
+    <title>AI HEDGE FUND TERMINAL</title>
     <style>
-        body { background-color: #121212; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 20px; display: flex; justify-content: center; }
-        .container { max-width: 400px; width: 100%; }
-        .card { background-color: #1e1e1e; border-radius: 15px; padding: 20px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        .nifty-header { font-size: 12px; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
-        .price-row { display: flex; justify-content: space-between; align-items: baseline; }
-        .ltp { font-size: 36px; font-weight: bold; }
-        .change { font-size: 16px; font-weight: bold; }
-        .green { color: #00e676; }
-        .red { color: #ff5252; }
-        .section-title { text-align: center; font-size: 12px; color: #4fc3f7; margin-bottom: 15px; letter-spacing: 1px; }
-        .levels-row { display: flex; justify-content: space-between; text-align: center; }
-        .level-box p { margin: 5px 0; font-size: 12px; color: #888; }
-        .level-box h3 { margin: 0; font-size: 20px; }
-        .prob-bar { width: 100%; height: 12px; background-color: #333; border-radius: 6px; overflow: hidden; display: flex; margin-top: 10px; }
-        .prob-bull { background-color: #00e676; transition: width 0.5s; }
-        .prob-bear { background-color: #ff5252; transition: width 0.5s; }
-        .signal-box { border-left: 4px solid #ffca28; padding-left: 15px; }
-        .signal-box h3 { margin: 0 0 10px 0; color: #ffca28; font-size: 18px; }
-        .signal-box p { margin: 5px 0; font-size: 14px; }
-        .btn { background-color: #3f51b5; color: white; border: none; padding: 15px; width: 100%; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; transition: 0.3s; box-sizing: border-box; }
-        .btn:active { opacity: 0.8; }
-        .footer-info { text-align: center; font-size: 11px; color: #666; margin-top: 20px; line-height: 1.5; }
-        .timer-box { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
-        .timer { background: #2a2a2a; padding: 10px 15px; border-radius: 8px; font-size: 14px; color: #00e676; font-weight: bold; }
-        .auto-refresh-text { font-size: 10px; color: #888; text-align: center; margin-top: 5px; }
+        body { background-color: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 15px; display: flex; justify-content: center; }
+        .dashboard { max-width: 800px; width: 100%; display: grid; gap: 15px; grid-template-columns: 1fr; }
+        @media (min-width: 600px) { .dashboard { grid-template-columns: 1fr 1fr; } .full-width { grid-column: span 2; } }
+        
+        .card { background-color: #161b22; border-radius: 12px; padding: 20px; border: 1px solid #30363d; box-shadow: 0 4px 6px rgba(0,0,0,0.5); }
+        .card-title { font-size: 12px; color: #58a6ff; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; border-bottom: 1px solid #30363d; padding-bottom: 5px;}
+        
+        .ltp-box { text-align: center; }
+        .ltp { font-size: 48px; font-weight: bold; color: #3fb950; text-shadow: 0 0 10px rgba(63, 185, 80, 0.3); margin: 10px 0;}
+        
+        .snr-row { display: flex; justify-content: space-between; text-align: center; }
+        .level-box p { margin: 0 0 5px 0; font-size: 12px; color: #8b949e; }
+        .level-box h3 { margin: 0; font-size: 26px; font-weight: bold; }
+        .green { color: #3fb950; } .red { color: #f85149; }
+
+        .idx-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center; }
+        .idx-item p { margin: 0; font-size: 10px; color: #8b949e; text-transform: uppercase;}
+        .idx-item h4 { margin: 5px 0 0 0; font-size: 13px; color: #fff; }
+
+        .fii-box { text-align: center; font-size: 18px; padding: 10px; background: #21262d; border-radius: 8px;}
+        
+        .vol-list { list-style: none; padding: 0; margin: 0; }
+        .vol-list li { display: flex; justify-content: space-between; font-size: 14px; padding: 8px 0; border-bottom: 1px solid #30363d; }
+        .vol-list li:last-child { border-bottom: none; }
+
+        .btn { background-color: #1f6feb; color: white; border: none; padding: 15px; width: 100%; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        .btn:active { background-color: #388bfd; }
+        .footer-info { text-align: center; font-size: 11px; color: #666; margin-top: 10px; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="card" style="border-bottom: 3px solid #00e676;" id="priceCard">
-        <div class="nifty-header">NIFTY 50 • LIVE</div>
-        <div class="price-row">
-            <div class="ltp" id="ltp">0.00</div>
-            <div class="change" id="change">0.00 (0.00%)</div>
+<div class="dashboard">
+    <div class="card ltp-box full-width" style="border-top: 3px solid #3fb950;">
+        <div class="card-title">NIFTY 50 • LIVE SPOT</div>
+        <div class="ltp" id="ltp">Loading...</div>
+    </div>
+
+    <div class="card">
+        <div class="card-title">🛡️ NSE Option Levels (S&R)</div>
+        <div class="snr-row">
+            <div class="level-box"><p class="red">SUPPORT</p><h3 id="support" class="green">-</h3></div>
+            <div class="level-box"><p class="green">RESISTANCE</p><h3 id="resistance" class="red">-</h3></div>
         </div>
     </div>
 
     <div class="card">
-        <div class="section-title">🛡️ NSE OPTION LEVELS</div>
-        <div class="levels-row">
-            <div class="level-box"><p class="red">SUPPORT</p><h3 id="support">-</h3></div>
-            <div class="level-box"><p class="green">RESISTANCE</p><h3 id="resistance">-</h3></div>
+        <div class="card-title">📈 Market Pulse</div>
+        <div class="idx-grid">
+            <div class="idx-item"><p>NIFTY 50</p><h4 id="idx-nifty">--</h4></div>
+            <div class="idx-item"><p>BANK NIFTY</p><h4 id="idx-bank">--</h4></div>
+            <div class="idx-item"><p>NIFTY IT</p><h4 id="idx-it">--</h4></div>
         </div>
     </div>
 
     <div class="card">
-        <div class="section-title">🧠 AI PROBABILITY SCORE</div>
-        <div class="levels-row" style="margin-bottom: 5px;">
-            <span style="font-size:12px; color:#00e676;" id="bullText">Bullish: 0%</span>
-            <span style="font-size:12px; color:#ff5252;" id="bearText">Bearish: 0%</span>
-        </div>
-        <div class="prob-bar">
-            <div class="prob-bull" id="bullBar" style="width: 50%;"></div>
-            <div class="prob-bear" id="bearBar" style="width: 50%;"></div>
+        <div class="card-title">🏦 FII/DII Flow (Latest)</div>
+        <div class="fii-box" id="fii-box">
+            Waiting for NSE data...
         </div>
     </div>
 
-    <div class="card signal-box">
-        <h3>🛒 Search: <span id="symbol">-</span></h3>
-        <p>🟢 Entry: <span id="entry">-</span> | 🔴 SL: <span id="sl">-</span></p>
-        <p>🎯 Target: <span id="t1">-</span> - <span id="t2">-</span></p>
+    <div class="card">
+        <div class="card-title">📊 Top Volume Gainers</div>
+        <ul class="vol-list" id="vol-list">
+            <li><span>Loading...</span><span>--</span></li>
+        </ul>
     </div>
 
-    <div class="timer-box">
-        <button class="btn" id="refreshBtn" onclick="fetchData()" style="width: 70%;">🔄 REFRESH LIVE DATA</button>
-        <div class="timer" id="timerDisplay">00:00</div>
-    </div>
-    <div class="auto-refresh-text" id="nextRefreshText">Auto-refreshing in...</div>
-    
-    <div class="footer-info" id="sourceInfo">
-        Source: Connecting... <br>
-        Time: --:--
+    <div class="card full-width" style="padding: 15px;">
+        <button class="btn" id="refreshBtn" onclick="fetchData()">🔄 REFRESH LIVE DASHBOARD</button>
+        <div class="footer-info" id="sourceInfo">Auto-refresh active | Time: --:--</div>
     </div>
 </div>
 
 <script>
     const API_URL = "https://nifty-algo-api.onrender.com/api/get_call";
-    let lastFetchTime = new Date();
-    let nextAutoRefreshSeconds = getRandomInt(180, 185); 
-
-    function getRandomInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
-
+    
     async function fetchData() {
         const btn = document.getElementById('refreshBtn');
-        btn.innerHTML = "⏳ Fetching AI Data...";
-        btn.style.backgroundColor = "#555"; 
+        btn.innerHTML = "⏳ Fetching Intelligence...";
         
         try {
             const response = await fetch(API_URL);
             const data = await response.json();
             
             if(data.status === "success") {
+                // 1. Live Price & S&R
                 document.getElementById('ltp').innerText = data.ltp;
-                let changeText = `${data.change > 0 ? '+' : ''}${data.change} (${data.pct}%)`;
-                let changeEl = document.getElementById('change');
-                changeEl.innerText = changeText;
-                
-                if(data.change >= 0) {
-                    changeEl.className = "change green";
-                    document.getElementById('priceCard').style.borderBottom = "3px solid #00e676";
-                } else {
-                    changeEl.className = "change red";
-                    document.getElementById('priceCard').style.borderBottom = "3px solid #ff5252";
-                }
-
                 document.getElementById('support').innerText = data.support;
                 document.getElementById('resistance').innerText = data.resistance;
 
-                document.getElementById('bullText').innerText = `Bullish: ${data.bullish}%`;
-                document.getElementById('bearText').innerText = `Bearish: ${data.bearish}%`;
-                document.getElementById('bullBar').style.width = `${data.bullish}%`;
-                document.getElementById('bearBar').style.width = `${data.bearish}%`;
+                // 2. Market Pulse (Indices)
+                if(data.intelligence.indices.nifty) {
+                    document.getElementById('idx-nifty').innerText = data.intelligence.indices.nifty;
+                    document.getElementById('idx-bank').innerText = data.intelligence.indices.bank;
+                    document.getElementById('idx-it').innerText = data.intelligence.indices.it;
+                }
 
-                document.getElementById('symbol').innerText = data.broker_symbol;
-                document.getElementById('entry').innerText = data.entry;
-                document.getElementById('sl').innerText = data.sl;
-                document.getElementById('t1').innerText = data.t1;
-                document.getElementById('t2').innerText = data.t2;
+                // 3. FII/DII Flow
+                if(data.intelligence.fii_dii) {
+                    let fii = data.intelligence.fii_dii;
+                    let color = fii.net > 0 ? '#3fb950' : '#f85149';
+                    document.getElementById('fii-box').innerHTML = `
+                        <span style="font-size: 14px; color:#8b949e">${fii.date}</span><br>
+                        Net: <b style="color:${color}">₹${fii.net} Cr</b> <br>
+                        <span style="font-size: 15px;">${fii.status}</span>
+                    `;
+                }
+
+                // 4. Volume Gainers
+                if(data.intelligence.vol_gainers && data.intelligence.vol_gainers.length > 0) {
+                    let volHtml = "";
+                    data.intelligence.vol_gainers.forEach(v => {
+                        volHtml += `<li><span>${v.symbol}</span><span style="color:#58a6ff">₹${v.last_price}</span></li>`;
+                    });
+                    document.getElementById('vol-list').innerHTML = volHtml;
+                }
 
                 let now = new Date();
-                document.getElementById('sourceInfo').innerHTML = `Source: <b style="color:#00e676;">${data.data_source}</b> <br> Time: ${now.toLocaleTimeString()}`;
-                
-                lastFetchTime = new Date();
-                nextAutoRefreshSeconds = getRandomInt(180, 185);
-            } else { console.log("API Error: " + data.message); }
+                document.getElementById('sourceInfo').innerHTML = `Last Sync: ${now.toLocaleTimeString()}`;
+            }
         } catch (error) { console.log("Retrying connection..."); }
         
-        btn.innerHTML = "🔄 REFRESH LIVE DATA";
-        btn.style.backgroundColor = "#3f51b5";
+        btn.innerHTML = "🔄 REFRESH LIVE DASHBOARD";
     }
 
-    setInterval(() => {
-        let now = new Date();
-        let diffMs = now - lastFetchTime;
-        let totalSeconds = Math.floor(diffMs / 1000);
-        let diffMins = Math.floor(totalSeconds / 60);
-        let diffSecs = totalSeconds % 60;
-        
-        let timerEl = document.getElementById('timerDisplay');
-        timerEl.innerText = `${String(diffMins).padStart(2, '0')}:${String(diffSecs).padStart(2, '0')}`;
-        
-        let remainingSeconds = nextAutoRefreshSeconds - totalSeconds;
-        if(remainingSeconds > 0) {
-            document.getElementById('nextRefreshText').innerText = `Auto-refresh in ${remainingSeconds}s (Zig-Zag Target: ${nextAutoRefreshSeconds}s)`;
-        } else {
-            document.getElementById('nextRefreshText').innerText = "Refreshing now...";
-        }
-        
-        if(totalSeconds >= nextAutoRefreshSeconds) { fetchData(); }
-    }, 1000);
-
+    // Auto refresh every 3 minutes
+    setInterval(fetchData, 180000);
     fetchData();
 </script>
 
